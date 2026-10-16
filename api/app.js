@@ -1,0 +1,35 @@
+
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import errorMiddleware from '../api/middleware/errorMiddleware.js';
+
+import authRouter from './routes/authRouter.js';
+
+const app = express();
+
+function start() {
+    const app = express();
+    const port = process.env.PORT || 3001;
+
+    app.use(express.json());
+    app.use(cookieParser());
+
+    if (process.env.CLIENT_URL) {
+        app.use(cors({
+            credentials: true,
+            origin: process.env.CLIENT_URL,
+        }));
+    }
+
+    // admin API (cookie-сессия, без API key)
+    app.use('/api/v1/admin', authRouter);
+    
+    app.use(errorMiddleware);
+
+    app.listen(port, () => {
+        console.log(`Server is running on port ${port}`);
+    });
+}
+
+export default start;
