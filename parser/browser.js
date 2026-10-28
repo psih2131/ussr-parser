@@ -10,7 +10,7 @@ import puppeteer from 'puppeteer';
 /** Запуск браузера */
 export async function createBrowser() {
   return puppeteer.launch({
-    headless: false,
+    headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
 }

@@ -18,6 +18,15 @@ class RabSpecService {
     }
   }
 
+  async getAllFull() {
+    try {
+      return await this.rabSpecRepository.getAllFull();
+    } catch (error) {
+      console.error(error);
+      throw ApiErrors.BadRequest('Ошибка получения данных для выгрузки');
+    }
+  }
+
   async getById(id) {
     try {
       const post = await this.rabSpecRepository.getById(id);

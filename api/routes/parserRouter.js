@@ -9,6 +9,7 @@ router.use(adminAuthMiddleware);
 
 // рабочие специальности
 router.get('/rab-spec', parserController.getRabSpecAll.bind(parserController));
+router.get('/rab-spec/export', parserController.getRabSpecExport.bind(parserController));
 router.delete('/rab-spec', parserController.deleteRabSpecAll.bind(parserController));
 router.get('/rab-spec/:id', parserController.getRabSpecById.bind(parserController));
 

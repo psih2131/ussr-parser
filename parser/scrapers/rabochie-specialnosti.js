@@ -12,177 +12,93 @@ import {
 } from '../browser.js';
 
 import { log } from '../utils.js';
+import { TrainingProps } from '../dom/trainingProps.js';
 
 import RabSpecRepository from '../../repositories/parser/rab_spec.js';
 
 const EMPTY_PAGE_DELAY_MS = 1 * 60 * 1000;
 const RETRY_DELAY_MS = 30 * 1000;
 
+const field = (value, weight, description) => ({ value, weight, description });
+
 // хоть одно поле пустое — считаем страницу битой
 function isEmptyPage(data) {
+  const seo = data.seo?.value;
   return (
-    data.title == null ||
-    data.seo_title == null ||
-    data.seo_meta_description == null ||
-    data.seo_slug == null
+    data.title?.value == null ||
+    seo?.title == null ||
+    seo?.meta_description == null ||
+    seo?.slug == null
   );
 }
 
 async function scrapePage(page, url) {
   await goTo(page, url);
 
-  const data = await page.evaluate(() => {
+  const fields = await page.evaluate(() => {
     // каталог / сайдбар-раздел — не карточка профессии
     if (document.querySelector('.a111.sidebar, .a111 .sidebar')) {
       return { skip: true, sourceUrl: location.href };
     }
 
-    const clean = (t) => (t || '').replace(/\s+/g, ' ').trim();
     const meta = (sel) => document.querySelector(sel)?.content?.trim() || null;
-
-    const findHeading = (re) =>
-      [...document.querySelectorAll('h2, h3')].find((h) => re.test(clean(h.innerText)));
-
-    /** Текст/списки сразу после заголовка до следующего h2/h3 */
-    const sectionAfterHeading = (re) => {
-      const h = findHeading(re);
-      if (!h) return { heading: null, text: null, items: [] };
-
-      const texts = [];
-      const items = [];
-      let el = h.nextElementSibling;
-      let guard = 0;
-
-      while (el && guard++ < 40) {
-        if (/^H[1-3]$/.test(el.tagName)) break;
-        if (el.tagName === 'P') {
-          const t = clean(el.innerText);
-          if (t) texts.push(t);
-        }
-        if (el.tagName === 'UL' || el.tagName === 'OL') {
-          items.push(
-            ...[...el.querySelectorAll(':scope > li')]
-              .map((li) => clean(li.innerText))
-              .filter(Boolean),
-          );
-        }
-        el = el.nextElementSibling;
-      }
-
-      return {
-        heading: clean(h.innerText) || null,
-        text: texts.length ? texts.join('\n\n') : null,
-        items,
-        paragraphs: texts,
-      };
-    };
-
-    /** Карточки .tizers-list__item в следующем блоке после заголовка */
-    const tizerCardsAfterHeading = (re) => {
-      const h = findHeading(re);
-      if (!h) return [];
-      const block = h.closest('.detail-block');
-      const scopes = [block, block?.nextElementSibling].filter(Boolean);
-      const cards = [];
-
-      for (const scope of scopes) {
-        for (const item of scope.querySelectorAll('.tizers-list__item')) {
-          const title = clean(item.querySelector('.tizers-list__item-name')?.innerText);
-          const description = clean(item.querySelector('.tizers-list__item-descr')?.innerText);
-          if (title) cards.push({ title, description: description || null });
-        }
-        if (cards.length) break;
-      }
-      return cards;
-    };
-
-    // --- sections (ncpo.ru) ---
-    const description = sectionAfterHeading(/Как стать/i);
-    const specialist = sectionAfterHeading(/Кто такой/i);
-    const duties = sectionAfterHeading(/Обязанности/i);
-    const audience = sectionAfterHeading(/востребованную профессию/i);
-    const format = sectionAfterHeading(/Сроки обучения/i);
-    const curriculumHeading = findHeading(/Чему вы научитесь/i);
-    const curriculumCards = tizerCardsAfterHeading(/Чему вы научитесь/i);
-    const benefits = sectionAfterHeading(/лицензией Минобразования/i);
-    const benefitsCards = tizerCardsAfterHeading(/лицензией Минобразования/i);
-    const documents = sectionAfterHeading(/Какие документы нужны/i);
-    const documentsCards = tizerCardsAfterHeading(/Какие документы нужны/i);
-    const enrollHeading = findHeading(/Как пройти обучение/i);
-    const enrollCards = tizerCardsAfterHeading(/Как пройти обучение/i);
-
-    const faqBlock = document.querySelector('.detail-block.faq');
-    const faqItems = faqBlock
-      ? [...faqBlock.querySelectorAll('.item-accordion-wrapper')]
-          .map((el) => ({
-            question: clean(el.querySelector('.accordion-head')?.innerText) || null,
-            answer: clean(el.querySelector('.accordion-body')?.innerText) || null,
-          }))
-          .filter((x) => x.question)
-      : [];
-
-    const benefitsItems = [
-      ...benefits.items,
-      ...benefitsCards
-        .map((c) => [c.title, c.description].filter(Boolean).join('. '))
-        .filter(Boolean),
-    ].filter((t) => t.length > 40);
-
-    const documentsText =
-      documents.text ||
-      (documentsCards.length
-        ? documentsCards
-            .map((c) => [c.title, c.description].filter(Boolean).join(' — '))
-            .join('\n')
-        : null);
 
     return {
       title: document.querySelector('.banners-big__title h1')?.innerText?.trim() || null,
-      description: document.querySelector('.detail-banner-conent')?.innerText?.trim() || null,
-      seo_title: document.title?.trim() || null,
-      seo_meta_description: meta('meta[name="description"]'),
-      seo_slug:
-        location.pathname.replace(/\/+$/, '').split('/').filter(Boolean).pop() || null,
-      seo_og_title: meta('meta[property="og:title"]'),
-      seo_og_type: meta('meta[property="og:type"]'),
-      seo_og_image: meta('meta[property="og:image"]'),
-      seo_og_url: meta('meta[property="og:url"]'),
-      seo_og_description: meta('meta[property="og:description"]'),
-      sections: {
-        description_heading: description.heading,
-        description_text: description.text,
-        specialist_heading: specialist.heading,
-        specialist_text: specialist.text,
-        duties_heading: duties.heading,
-        duties_items: duties.items.length ? duties.items : duties.paragraphs,
-        audience_heading: audience.heading,
-        audience_text: audience.text,
-        format_heading: format.heading,
-        format_text: format.text,
-        curriculum_heading: curriculumHeading
-          ? clean(curriculumHeading.innerText)
-          : null,
-        curriculum_items: curriculumCards,
-        benefits_heading: benefits.heading,
-        benefits_items: benefitsItems,
-        documents_heading: documents.heading,
-        documents_text: documentsText,
-        enroll_heading: enrollHeading ? clean(enrollHeading.innerText) : null,
-        enroll_steps: enrollCards.map((c) =>
-          [c.title, c.description].filter(Boolean).join('. '),
-        ),
-        faq_heading: faqBlock
-          ? clean(
-              faqBlock.querySelector('.ordered-block__title, .switcher-title, h2, h3')
-                ?.innerText,
-            ) || 'Вопросы'
-          : null,
-        faq_items: faqItems,
+      seo: {
+        title: document.title?.trim() || null,
+        meta_description: meta('meta[name="description"]') || null,
+        slug:
+          location.pathname.replace(/\/+$/, '').split('/').filter(Boolean).pop() || null,
+        og_title: meta('meta[property="og:title"]') || null,
+        og_type: meta('meta[property="og:type"]') || null,
+        og_image: meta('meta[property="og:image"]') || null,
+        og_url: meta('meta[property="og:url"]') || null,
+        og_description: meta('meta[property="og:description"]') || null,
       },
+      price: {
+        current_price: document.querySelector('.price__new_div .price__new-val')?.getAttribute('content')?.trim() || null,
+        old_price: document.querySelector('.price__old_div .price__old .price__old-val')?.innerText?.trim() || null,
+      },
+      faq: [...document.querySelectorAll('.detail-block.faq .item-accordion-wrapper')]
+        .map((el) => ({
+          question: el.querySelector('.accordion-head')?.innerText?.replace(/\s+/g, ' ').trim() || null,
+          answer: el.querySelector('.accordion-body')?.innerText?.replace(/\s+/g, ' ').trim() || null,
+        }))
+        .filter((item) => item.question),
       sourceUrl: location.href,
-      skip: false,
     };
   });
+
+  if (fields?.skip) {
+    log(fields);
+    return fields;
+  }
+
+  const data = {
+    title: field(fields.title, 1, 'Заголовок страницы'),
+    sourceUrl: field(fields.sourceUrl, 2, 'Адрес спарсенной страницы'),
+    seo: field(fields.seo, 3, 'SEO из head: title, description, slug и Open Graph'),
+    price: field(fields.price, 4, 'Текущая и старая цена'),
+    training: field(
+      {
+        qualification: await TrainingProps.qualification(page),
+        rank: await TrainingProps.rank(page),
+        duration: await TrainingProps.duration(page),
+      },
+      5,
+      'Квалификация, разряд и срок обучения',
+    ),
+    faq: field(fields.faq, 6, 'Вопросы и ответы'),
+    price_variants: field(await TrainingProps.priceVariants(page), 7, 'Варианты стоимости курса'),
+    tariffs: field(await TrainingProps.tariffs(page), 8, 'Тарифы: стикер, название, текст и цены'),
+    popular: field(await TrainingProps.popular(page), 9, 'Популярные специальности'),
+    recommended: field(await TrainingProps.recommended(page), 10, 'Блок «Интересуются также»'),
+    recommend: field(await TrainingProps.recommend(page), 11, 'Блок «Рекомендуем»'),
+    seo_text: field(await TrainingProps.seoText(page), 12, 'Текстовый SEO-блок, HTML сохранён'),
+    footer_text: field(await TrainingProps.footerText(page), 13, 'Нижний текстовый блок, HTML сохранён'),
+    skip: field(false, 14, 'Служебный флаг пропуска страницы'),
+  };
 
   log(data);
   return data;
@@ -216,8 +132,9 @@ export async function parseRabochieSpecialnosti(browser, links = []) {
       let data = await scrapePage(page, url);
 
       // .a111 .sidebar — не карточка, в БД не пишем
-      if (data?.skip) {
-        log('пропуск (sidebar):', data.sourceUrl || url);
+      // skip у карточки — объект { value: false }, его нельзя считать пропуском
+      if (data?.skip === true || data?.skip?.value === true) {
+        log('пропуск (sidebar):', data.sourceUrl?.value || data.sourceUrl || url);
         const pagePause = await sleepBetweenPages();
         log(`пауза ${pagePause} мс (${i + 1}/${links.length})`);
         continue;
@@ -229,8 +146,8 @@ export async function parseRabochieSpecialnosti(browser, links = []) {
         await sleep(RETRY_DELAY_MS);
         data = await scrapePage(page, url);
 
-        if (data?.skip) {
-          log('пропуск (sidebar):', data.sourceUrl || url);
+        if (data?.skip === true || data?.skip?.value === true) {
+          log('пропуск (sidebar):', data.sourceUrl?.value || data.sourceUrl || url);
           const pagePause = await sleepBetweenPages();
           log(`пауза ${pagePause} мс (${i + 1}/${links.length})`);
           continue;
@@ -242,10 +159,10 @@ export async function parseRabochieSpecialnosti(browser, links = []) {
       }
 
       const empty = isEmptyPage(data);
-      const postUrl = data.sourceUrl || url;
+      const postUrl = data.sourceUrl?.value || url;
       const existing = await rabSpec.getByUrl(postUrl);
       const payload = {
-        title: data.title,
+        title: data.title?.value ?? null,
         parser_load: !empty,
         post_data: data,
         parser_logs: empty ? 'пустые данные / капча / блок' : null,

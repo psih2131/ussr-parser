@@ -18,6 +18,19 @@ class ParserController {
     }
   }
 
+  async getRabSpecExport(req, res, next) {
+    try {
+      const posts = await this.rabSpecService.getAllFull();
+
+      return res.status(200).json({
+        success: true,
+        data: { posts },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getRabSpecById(req, res, next) {
     try {
       const post = await this.rabSpecService.getById(req.params.id);

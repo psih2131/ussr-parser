@@ -6,6 +6,7 @@ import errorMiddleware from '../api/middleware/errorMiddleware.js';
 
 import authRouter from './routes/authRouter.js';
 import parserRouter from './routes/parserRouter.js';
+import aiRouter from './routes/aiRouter.js';
 
 function start() {
     const app = express();
@@ -24,6 +25,7 @@ function start() {
     // admin API (cookie-сессия, без API key)
     app.use('/api/v1/admin', authRouter);
     app.use('/api/v1/admin/parser', parserRouter);
+    app.use('/api/v1/admin/ai', aiRouter);
 
     app.use(errorMiddleware);
 

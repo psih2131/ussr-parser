@@ -5,6 +5,7 @@ const LIST_COLUMNS = `
   url,
   title,
   parser_load,
+  ai_load,
   parser_logs,
   created_at,
   updated_at
@@ -40,6 +41,26 @@ class RabSpecRepository {
   async getAll() {
     const query = `
       SELECT ${LIST_COLUMNS}
+      FROM rab_spec
+      ORDER BY id DESC
+    `;
+    const result = await this.pool.query(query);
+    return result.rows;
+  }
+
+  async getAllWithPostData() {
+    const query = `
+      SELECT id, post_data
+      FROM rab_spec
+      ORDER BY id ASC
+    `;
+    const result = await this.pool.query(query);
+    return result.rows;
+  }
+
+  async getAllFull() {
+    const query = `
+      SELECT *
       FROM rab_spec
       ORDER BY id DESC
     `;
@@ -93,6 +114,36 @@ class RabSpecRepository {
       JSON.stringify(post_data),
       parser_logs,
     ]);
+    return result.rows[0] || null;
+  }
+
+  async updateAiData(id, ai_data) {
+    const query = `
+      UPDATE rab_spec
+      SET
+        ai_data = $2,
+        ai_load = true,
+        updated_at = current_timestamp
+      WHERE id = $1
+      RETURNING *
+    `;
+    const result = await this.pool.query(query, [
+      id,
+      JSON.stringify(ai_data),
+    ]);
+    return result.rows[0] || null;
+  }
+
+  async updateAiLoad(id, ai_load) {
+    const query = `
+      UPDATE rab_spec
+      SET
+        ai_load = $2,
+        updated_at = current_timestamp
+      WHERE id = $1
+      RETURNING id
+    `;
+    const result = await this.pool.query(query, [id, ai_load]);
     return result.rows[0] || null;
   }
 
