@@ -120,12 +120,14 @@ export async function parseRabochieSpecialnosti(browser, links = []) {
 
     let count = 0;
 
-    if(links.length > 10){
-      count = 10;
-    }
-    else{
-      count = links.length;
-    }
+    // if(links.length > 10){
+    //   count = 10;
+    // }
+    // else{
+    //   count = links.length;
+    // }
+    count = links.length;
+
     // с конца списка (последние ссылки sitemap первыми)
     for (let i = 0; i < count; i++) {
       const url = links[links.length - 1 - i];
