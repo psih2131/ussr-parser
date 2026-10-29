@@ -71,6 +71,20 @@ class ParserController {
     }
   }
 
+  async startMissing(req, res, next) {
+    try {
+      const { name } = req.params;
+      const status = await this.rabSpecService.startMissing(name);
+
+      return res.status(200).json({
+        success: true,
+        data: status,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async startOne(req, res, next) {
     try {
       const { name } = req.params;

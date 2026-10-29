@@ -104,7 +104,7 @@ async function scrapePage(page, url) {
   return data;
 }
 
-export async function parseRabochieSpecialnosti(browser, links = []) {
+export async function parseRabochieSpecialnosti(browser, links = [], { skipExisting = false } = {}) {
   if (!links.length) {
     log('rabochie-specialnosti: список ссылок пуст');
     return;
@@ -131,6 +131,13 @@ export async function parseRabochieSpecialnosti(browser, links = []) {
     // с конца списка (последние ссылки sitemap первыми)
     for (let i = 0; i < count; i++) {
       const url = links[links.length - 1 - i];
+
+      // режим «только недостающие»: уже сохранённый url не открываем
+      if (skipExisting && await rabSpec.existsByUrl(url)) {
+        log('уже в базе, пропуск:', url);
+        continue;
+      }
+
       let data = await scrapePage(page, url);
 
       // .a111 .sidebar — не карточка, в БД не пишем

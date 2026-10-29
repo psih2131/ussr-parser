@@ -81,6 +81,31 @@ class RabSpecService {
     return this.getStatus();
   }
 
+  // тот же парсер, но страницы, которые уже есть в базе, пропускаются
+  async startMissing(nameParser) {
+    if (this.statusLoad === 'loading') {
+      return this.getStatus();
+    }
+
+    if (nameParser !== 'rab-spec') {
+      throw ApiErrors.BadRequest(`Неизвестный парсер: ${nameParser}`);
+    }
+
+    this.statusLoad = 'loading';
+
+    this.parser
+      .rabochieSpecialnosti(null, { skipExisting: true })
+      .then(() => {
+        this.statusLoad = 'everything is loaded';
+      })
+      .catch((error) => {
+        console.error(error);
+        this.statusLoad = 'error loading';
+      });
+
+    return this.getStatus();
+  }
+
   async startOne(nameParser, url) {
     if (this.statusLoad === 'loading') {
       return this.getStatus();

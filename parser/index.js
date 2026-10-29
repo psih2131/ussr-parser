@@ -33,7 +33,7 @@ export class Parser {
     });
   }
 
-  async rabochieSpecialnosti(linksList = null) {
+  async rabochieSpecialnosti(linksList = null, options = {}) {
     log('Parser: рабочие специальности');
 
     await this.#withBrowser(async (browser) => {
@@ -41,7 +41,7 @@ export class Parser {
       if (linksList) {
         links = linksList;
       }
-      await parseRabochieSpecialnosti(browser, links);
+      await parseRabochieSpecialnosti(browser, links, options);
     });
   }
 

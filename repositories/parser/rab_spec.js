@@ -90,6 +90,18 @@ class RabSpecRepository {
     return result.rows[0] || null;
   }
 
+  // есть ли пост с таким адресом (хвостовой слэш не учитываем)
+  async existsByUrl(url) {
+    const query = `
+      SELECT id
+      FROM rab_spec
+      WHERE rtrim(url, '/') = rtrim($1, '/')
+      LIMIT 1
+    `;
+    const result = await this.pool.query(query, [url]);
+    return Boolean(result.rows[0]);
+  }
+
   async updateById(id, {
     title = null,
     parser_load = false,

@@ -15,6 +15,7 @@ router.get('/rab-spec/:id', parserController.getRabSpecById.bind(parserControlle
 
 // запуск / статус по имени парсера (например rab-spec)
 router.post('/start/:name', parserController.start.bind(parserController));
+router.post('/start-missing/:name', parserController.startMissing.bind(parserController));
 router.post('/start-one/:name', parserController.startOne.bind(parserController));
 router.get('/status', parserController.getStatus.bind(parserController));
 
