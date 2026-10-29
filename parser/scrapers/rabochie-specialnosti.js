@@ -104,13 +104,73 @@ async function scrapePage(page, url) {
   return data;
 }
 
+function errorText(error) {
+  const message = error?.message || String(error);
+  return message.slice(0, 500);
+}
+
+// после обрыва соединения страница часто уже непригодна — открываем новую
+async function replacePage(browser, page) {
+  try {
+    await page.close();
+  } catch {
+    // цель уже закрыта
+  }
+  return browser.newPage();
+}
+
+// сеть отказала — один повтор через 30 сек, иначе ошибка наверх не летит
+async function scrapeWithRetry(browser, page, url) {
+  try {
+    return { page, data: await scrapePage(page, url) };
+  } catch (error) {
+    log('ошибка открытия, повтор через 30 сек:', url, errorText(error));
+    await sleep(RETRY_DELAY_MS);
+
+    const nextPage = await replacePage(browser, page);
+    try {
+      return { page: nextPage, data: await scrapePage(nextPage, url) };
+    } catch (retryError) {
+      log('повтор не помог:', url, errorText(retryError));
+      return { page: nextPage, error: retryError };
+    }
+  }
+}
+
+// пишем ошибку в parser_logs; уже собранный пост не затираем
+async function saveConnectionError(rabSpec, url, error) {
+  const parser_logs = `нет соединения: ${errorText(error)}`;
+  const existing = await rabSpec.getByUrl(url);
+
+  if (existing?.parser_load) {
+    log('уже собрано, данные не затираем', existing.id, url);
+    return;
+  }
+
+  const payload = {
+    title: existing?.title ?? null,
+    parser_load: false,
+    post_data: existing?.post_data ?? {},
+    parser_logs,
+  };
+
+  if (existing) {
+    await rabSpec.updateById(existing.id, payload);
+    log('ошибка соединения записана', existing.id);
+    return;
+  }
+
+  const created = await rabSpec.create({ url, ...payload });
+  log('ошибка соединения записана', created.id);
+}
+
 export async function parseRabochieSpecialnosti(browser, links = [], { skipExisting = false } = {}) {
   if (!links.length) {
     log('rabochie-specialnosti: список ссылок пуст');
     return;
   }
 
-  const page = await browser.newPage();
+  let page = await browser.newPage();
   const rabSpec = new RabSpecRepository();
   log(`rabochie-specialnosti: карточек ${links.length}`);
 
@@ -138,7 +198,20 @@ export async function parseRabochieSpecialnosti(browser, links = [], { skipExist
         continue;
       }
 
-      let data = await scrapePage(page, url);
+      let opened = await scrapeWithRetry(browser, page, url);
+      page = opened.page;
+
+      // сайт отклонил соединение — пишем лог и идём к следующей ссылке
+      if (opened.error) {
+        await saveConnectionError(rabSpec, url, opened.error);
+        if (i < links.length - 1 && i != 0) {
+          log('нет соединения, пауза 5 мин перед следующей ссылкой');
+          await sleep(EMPTY_PAGE_DELAY_MS);
+        }
+        continue;
+      }
+
+      let data = opened.data;
 
       // .a111 .sidebar — не карточка, в БД не пишем
       // skip у карточки — объект { value: false }, его нельзя считать пропуском
@@ -153,7 +226,19 @@ export async function parseRabochieSpecialnosti(browser, links = [], { skipExist
       if (isEmptyPage(data)) {
         log('пустые данные, повтор через 30 сек');
         await sleep(RETRY_DELAY_MS);
-        data = await scrapePage(page, url);
+        opened = await scrapeWithRetry(browser, page, url);
+        page = opened.page;
+
+        if (opened.error) {
+          await saveConnectionError(rabSpec, url, opened.error);
+          if (i < links.length - 1 && i != 0) {
+            log('нет соединения, пауза 5 мин перед следующей ссылкой');
+            await sleep(EMPTY_PAGE_DELAY_MS);
+          }
+          continue;
+        }
+
+        data = opened.data;
 
         if (data?.skip === true || data?.skip?.value === true) {
           log('пропуск (sidebar):', data.sourceUrl?.value || data.sourceUrl || url);
